@@ -8,14 +8,23 @@ from dotenv import load_dotenv
 import sqlite3
 from langgraph.checkpoint.sqlite import SqliteSaver
 
+from langgraph.prebuilt import tools_condition, ToolNode
+from langchain_community.tools import DuckDuckGoSearchRun
+from langchain_core.tools import Tool
+
 load_dotenv()
 
 LLM = ChatGroq(model="llama-3.3-70b-versatile", temperature=0.7)
 
 class chatbotstate(TypedDict):
-    
     messages: Annotated[list[BaseMessage], add_messages]
-    
+
+# tool
+search_tool = DuckDuckGoSearchRun(region="us-en")
+
+
+# @Tool
+# def calculate_tool() 
 def chat_node(state: chatbotstate):
     chatmessages = state["messages"]
     response = LLM.invoke(chatmessages)
@@ -23,6 +32,7 @@ def chat_node(state: chatbotstate):
     
 graph = StateGraph(chatbotstate)
 graph.add_node("chat_node", chat_node)
+graph.add_tool_node("search_tool", search_tool, tools_condition)
 graph.add_edge(START, "chat_node")
 graph.add_edge("chat_node", END)
 
