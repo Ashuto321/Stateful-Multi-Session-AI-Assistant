@@ -40,7 +40,6 @@ def calculate_tool(first_num: float, second_num: float, operation: Literal['add'
     - div: division
     """
     try:
-        
         if operation == "add":
             result = first_num + second_num
         elif operation == "sub":
