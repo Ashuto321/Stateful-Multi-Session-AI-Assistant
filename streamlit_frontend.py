@@ -1,7 +1,7 @@
 import streamlit as st
 # lets import the chatbot object form the langgraph here
 from Langgraph_backend import chatbot, retrieve_all_threads
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 # for automating the threadid
 import uuid
 
@@ -101,15 +101,51 @@ if user_input:
     
     # using the st.write_stream in streamlit
     with st.chat_message("assistant"):
+        status_holder = {"box": None}
         def ai_stream_only():
+
             for message_chunk, metadata in chatbot.stream(
-                    {"messages": [HumanMessage(content=user_input)]},
-                    config = config1,
-                    stream_mode="messages"
-                ):
-                    if isinstance(message_chunk, AIMessage):
-                        # yield only assistant tokens
+                {"messages": [HumanMessage(content=user_input)]},
+                config=config1,
+                stream_mode="messages"
+            ):
+
+                # Tool message → show tool status
+                if isinstance(message_chunk, ToolMessage):
+
+                    tool_name = getattr(message_chunk, "name", "tool")
+
+                    if status_holder["box"] is None:
+                        status_holder["box"] = st.status(
+                            f"Using `{tool_name}` …",
+                            expanded=True
+                        )
+                    else:
+                        status_holder["box"].update(
+                            label=f"Using `{tool_name}` …",
+                            state="running",
+                            expanded=True
+                        )
+
+                # AI message → stream assistant tokens
+                elif isinstance(message_chunk, AIMessage):
+
+                    if message_chunk.content:
                         yield message_chunk.content
+
         ai_message = st.write_stream(ai_stream_only())
-        
-    st.session_state['message_history'].append({'role':'assistant', 'content':ai_message})
+
+        # Finalize only if a tool was actually used
+        if status_holder["box"] is not None:
+            status_holder["box"].update(
+                label="Tool finished",
+                state="complete",
+                expanded=False
+            )
+
+st.session_state["message_history"].append(
+    {
+        "role": "assistant",
+        "content": ai_message
+    }
+)
