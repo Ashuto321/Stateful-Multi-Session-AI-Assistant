@@ -14,7 +14,7 @@ from langchain_core.tools import tool
 
 load_dotenv()
 
-LLM = ChatGroq(model="llama-3.3-70b-versatile", temperature=0)
+LLM = ChatGroq(model="qwen/qwen3.6-27b", temperature=0)
 
 
 # search tool for the chatbot
