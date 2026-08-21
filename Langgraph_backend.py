@@ -2,10 +2,11 @@ from langgraph.graph import StateGraph, START, END
 from langchain_groq import ChatGroq
 from langchain_core.messages import BaseMessage, HumanMessage
 from langgraph.graph.message import add_messages
-from typing import Annotated, TypedDict, Literal
+from typing import Annotated, TypedDict, Literal, Optional, Dict, Any
 from dotenv import load_dotenv
 # from langgraph.checkpoint.memory import InMemorySaver # for RAM based memeory
 import sqlite3
+import tempfile
 from langgraph.checkpoint.sqlite import SqliteSaver
 
 from langgraph.prebuilt import tools_condition, ToolNode
@@ -16,7 +17,40 @@ load_dotenv()
 
 LLM = ChatGroq(model="qwen/qwen3.6-27b", temperature=0)
 
+# adding the rag
+_thread_retriever: Dict[str, Any] = {}
+_thread_metadata: Dict[str, dict] = {}
 
+
+# fetching the retriever data
+# reterining the data if the retriever has it for that particular thread.
+
+def _get_retriever(thread_id: Optional[str]):
+    "fetch the thread id for a retriever if exists"
+    if thread_id and thread_id in _thread_retriever:
+        return _thread_retriever(thread_id)
+    return None
+
+# function injest for rag pipeline like indexing and retrival
+
+def ingest(file_bytes: bytes, thread_id: str, filename: Optional[str] = None)-> dict:
+    
+    #checking i
+    if not file_bytes:
+        return ValueError("no bites received during injestion")
+    
+    # else we will create a temp file
+    #do import tempfile
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file: 
+        # puuting this file in temporary file
+        temp_file.write(file_bytes)
+        # saving the path of the temporary file
+        temp_path = temp_file.name
+         
+    
+
+    
+# builtin tool for chatbot
 # search tool for the chatbot
 search_tool = DuckDuckGoSearchRun(
     name="internet_search",
@@ -28,6 +62,7 @@ search_tool = DuckDuckGoSearchRun(
     )
 )
 
+# custom tool for the chatbot
 @tool
 def calculate_tool(first_num: float, second_num: float, operation: Literal['add','sub','multi','div']) -> dict:
     """
@@ -56,6 +91,16 @@ def calculate_tool(first_num: float, second_num: float, operation: Literal['add'
         return {"first_num": first_num, "second_num": second_num, "operation": operation, "result": result}
     except Exception as e:
         return {"error": str(e)}
+    
+# custom tool for chatbot
+
+@tool
+def rag_tool(query):
+    """ Retrieve relevant information from the pdf document
+        use this tool when user ask for factual/conceptual questions
+        that might be answered from the loaded document by the user
+    """
+    
 
 # combining the tools 
 tools = [search_tool, calculate_tool]
