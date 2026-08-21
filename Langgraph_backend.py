@@ -199,7 +199,8 @@ chatbot = graph.compile(checkpointer=checkpointer)
 def retrieve_all_threads():
     all_thread = set() # for unique thread
     for checkpoint in checkpointer.list(None):
-        all_thread.add(checkpoint.config["configurable"]["thread_id"])
+        all_thread.add(checkpoint.config["configurable"]["thread_id"]) 
+        
         
     return list(all_thread)
  
