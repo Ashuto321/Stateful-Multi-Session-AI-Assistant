@@ -7,11 +7,18 @@ from dotenv import load_dotenv
 # from langgraph.checkpoint.memory import InMemorySaver # for RAM based memeory
 import sqlite3
 import tempfile
+import os
 from langgraph.checkpoint.sqlite import SqliteSaver
 
 from langgraph.prebuilt import tools_condition, ToolNode
 from langchain_community.tools import DuckDuckGoSearchRun
 from langchain_core.tools import tool
+
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.vectorstores import FAISS
+
 
 load_dotenv()
 
@@ -31,9 +38,16 @@ def _get_retriever(thread_id: Optional[str]):
         return _thread_retriever(thread_id)
     return None
 
+
 # function injest for rag pipeline like indexing and retrival
 
 def ingest(file_bytes: bytes, thread_id: str, filename: Optional[str] = None)-> dict:
+    """
+    Build a FAISS retriever for the uploaded PDF and store it for the thread.
+
+    Returns a summary dict that can be surfaced in the UI.
+    
+    """
     
     #checking i
     if not file_bytes:
@@ -46,7 +60,49 @@ def ingest(file_bytes: bytes, thread_id: str, filename: Optional[str] = None)-> 
         temp_file.write(file_bytes)
         # saving the path of the temporary file
         temp_path = temp_file.name
-         
+    
+    
+    try:
+       
+       #loader
+       loader = PyPDFLoader(temp_path)
+       doc = loader.load()
+       
+       #splitter
+       splitter = RecursiveCharacterTextSplitter(chunk_size=100, chunk_overlap=10, separators=["\n\n", "\n", " ", ""])
+       chunk = splitter.split_documents(doc)
+       
+       # embedding generator(with model) and stroing them in vector store
+       embedding_model = HuggingFaceEmbeddings(model="sentence-transformers/all-MiniLM-L6-v2")
+       vector_store = FAISS.from_documents(chunk, embedding_model) 
+       
+       #retriever
+       retriever = vector_store.as_retriever(search_type= 'similarity', search_kwags={'k':4})
+       
+       # now for corresponsid retriever we need to store thread id
+       _thread_retriever[str(thread_id)] = retriever
+       
+       # now we need store thread_metadata
+       _thread_metadata[str(thread_id)] = {
+           "filename": filename or os.path.basename(temp_path),
+           "documents": len(doc),
+           "chunks": len(chunk),
+       }
+       
+       # now we will be returing
+       return {
+           "filename": filename or os.path.basename(temp_path),
+           "documents": len(doc),
+           "chunks": len(chunk)
+       }
+       
+    finally:
+          # (finally)means wheather everything succeedes or crashed excute the cleanup code.
+          try:
+              os.remove(temp_path)    
+          except OSError:
+              pass
+                
     
 
     
@@ -147,3 +203,4 @@ def retrieve_all_threads():
         
     return list(all_thread)
  
+#  helper function for cheking if thread 
